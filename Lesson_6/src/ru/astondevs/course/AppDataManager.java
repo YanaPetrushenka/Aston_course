@@ -44,8 +44,8 @@ public class AppDataManager {
         appData.setHeader(lines.get(HEADER_INDEX).split(DELIMETER));
         int[][] values = new int[lines.size() - 1][];
 
-        for (int i = 1; i < lines.size(); i++) {
-            values[i] = lineToIntArr(lines.get(i));
+        for (int i = 0; i < values.length; i++) {
+            values[i] = lineToIntArr(lines.get(i + 1));
         }
 
         appData.setData(values);

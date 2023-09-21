@@ -1,5 +1,7 @@
 package ru.astondevs.course;
 
+import java.util.Arrays;
+
 public class Application {
     public static void main(String[] args) {
         var appDataManager = new AppDataManager();
@@ -10,8 +12,14 @@ public class Application {
         AppData appData = new AppData();
         appData.setHeader(headers);
         appData.setData(values);
-
         appDataManager.save(appData);
-        appData.getData();
+        var data = appDataManager.get();
+
+        System.out.println(Arrays.toString(data.getHeader()));
+
+        Arrays.stream(data.getData())
+                .forEach(
+                        arr -> System.out.println(Arrays.toString(arr))
+                );
     }
 }
