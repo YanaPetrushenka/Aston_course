@@ -8,13 +8,11 @@ import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,6 +27,11 @@ class MtsTest {
         var config = ResourceBundle.getBundle("config");
         driver = WebDriverManager.chromedriver().create();
         driver.get(config.getString("url"));
+
+//        accept cookies
+        var cookiesButton = driver.findElement(By.id("cookie-agree"));
+        cookiesButton.click();
+
         payBlock = driver.findElement(By.xpath("//section[@class = 'pay']"));
     }
 
@@ -39,50 +42,87 @@ class MtsTest {
 
     @Test
     @Order(1)
-    void testTitle() {
-        var title = payBlock.findElement(By.xpath("div/h2"));
-        assertEquals("Онлайн пополнение\nбез комиссии", title.getText());
+    void testPayForms() {
+        var payFormsExpectedPlaceholders = Map.of(
+                "pay-connection", List.of("Номер телефона", "Сумма", "E-mail для отправки чека"),
+                "pay-internet", List.of("Номер абонента", "Сумма", "E-mail для отправки чека"),
+                "pay-instalment", List.of("Номер счета на 44", "Сумма", "E-mail для отправки чека"),
+                "pay-arrears", List.of("Номер счета на 2073", "Сумма", "E-mail для отправки чека")
+        );
+
+        for (var entry : payFormsExpectedPlaceholders.entrySet()) {
+            var actualPlaceholders = getPayFormPlaceholders(entry.getKey());
+            var expectedPlaceholders = entry.getValue();
+
+            assertEquals(expectedPlaceholders.size(), actualPlaceholders.size());
+            assertTrue(actualPlaceholders.containsAll(expectedPlaceholders));
+            assertTrue(expectedPlaceholders.containsAll(actualPlaceholders));
+        }
     }
 
     @Test
     @Order(2)
-    void testPaySystemsLogos() {
-        var visa = payBlock.findElement(By.xpath("//img[@alt='Visa']"));
-        assertTrue(visa.isDisplayed());
-
-        var verifiedVisa = payBlock.findElement(By.xpath("//img[@alt='Verified By Visa']"));
-        assertTrue(verifiedVisa.isDisplayed());
-
-        var masterCard = payBlock.findElement(By.xpath("//img[@alt='MasterCard']"));
-        assertTrue(masterCard.isDisplayed());
-
-        var masterCardSecureCode = payBlock.findElement(By.xpath("//img[@alt='MasterCard Secure Code']"));
-        assertTrue(masterCardSecureCode.isDisplayed());
-
-        var belCard = payBlock.findElement(By.xpath("//img[@alt='Белкарт']"));
-        assertTrue(belCard.isDisplayed());
-
-        var mir = payBlock.findElement(By.xpath("//img[@alt='МИР']"));
-        assertTrue(mir.isDisplayed());
-    }
-
-    @Test
-    @Order(3)
-    void testDetailsLink() {
-        var detailsLink = payBlock.findElement(By.linkText("Подробнее о сервисе"));
-        String url = detailsLink.getAttribute("href");
-        var responseCode = getLinkResponseCode(url);
-        assertEquals(200, responseCode);
-    }
-
-    @Test
-    @Order(4)
     void testFieldsAndProceedButton() {
-//        accept cookies
-        var cookiesButton = driver.findElement(By.id("cookie-agree"));
-        cookiesButton.click();
+        fillConnectionPayForm();
+        var proceedButton = payBlock.findElement(By.cssSelector("button[type='submit']"));
+        proceedButton.click();
 
-//        fill payment fields
+//        wait payment popup visible
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+        wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.cssSelector("iframe[class='bepaid-iframe']")));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector("p[class='header__payment-amount']")));
+
+//        check sum header
+        var sumHeader = driver.findElement(By.cssSelector("p[class='header__payment-amount']"));
+        assertEquals("1.00 BYN", sumHeader.getText());
+
+//        check sum button
+        var submitButton = driver.findElement(By.cssSelector("button[type='submit']"));
+        assertEquals("Оплатить 1.00 BYN", submitButton.getText());
+
+//        check phone header
+        var phoneHeader = driver.findElement(By.cssSelector("p[class='header__payment-info']"));
+        assertEquals("Оплата: Услуги связи Номер:375297777777", phoneHeader.getText());
+
+//        check card inputs placeholders
+        var cardInputsExpectedLabels = Map.of(
+                "creditCard", "Номер карты",
+                "expirationDate", "Срок действия",
+                "cvc", "CVC",
+                "holder", "Имя держателя (как на карте)"
+        );
+
+        cardInputsExpectedLabels.forEach((key, value) -> {
+            var labelXpath = String.format("//div[input[@formcontrolname='%s']]/label", key);
+            var label = driver.findElement(By.xpath(labelXpath));
+            assertEquals(value, label.getText());
+        });
+
+//        check logos
+        var logosImageNames = List.of("mastercard-system.svg", "visa-system.svg", "belkart-system.svg");
+        var logoXpathTemplate = "//div[contains (@class, 'cards-brands__container')]//img[contains (@src, '%s')]";
+
+        logosImageNames.forEach(name -> {
+                    var logoImgXpath = String.format(logoXpathTemplate, name);
+                    var logoImg = driver.findElement(By.xpath(logoImgXpath));
+                    assertTrue(logoImg.isDisplayed());
+                }
+        );
+
+        var mirLogo = driver.findElement(By.xpath(String.format(logoXpathTemplate, "mir-system-ru.svg")));
+        var maestroLogo = driver.findElement(By.xpath(String.format(logoXpathTemplate, "maestro-system.svg")));
+        assertTrue(mirLogo.isDisplayed() || maestroLogo.isDisplayed());
+    }
+
+    private List<String> getPayFormPlaceholders(String payFormId) {
+        var payForm = payBlock.findElement(By.id(payFormId));
+
+        return payForm.findElements(By.tagName("input")).stream()
+                .map(e -> e.getAttribute("placeholder"))
+                .collect(Collectors.toList());
+    }
+
+    private void fillConnectionPayForm() {
         var optionsButton = payBlock.findElement(By.cssSelector("button[class='select__header']"));
         optionsButton.click();
 
@@ -97,39 +137,5 @@ class MtsTest {
 
         var emailInput = payBlock.findElement(By.id("connection-email"));
         emailInput.sendKeys("Jouhn@Doe.com");
-
-        var proceedButton = payBlock.findElement(By.cssSelector("button[type='submit']"));
-        proceedButton.click();
-
-//        handle payment info popup
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
-        wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.cssSelector("iframe[class='bepaid-iframe']")));
-        wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector("p[class='header__payment-amount']")));
-
-        var paymentPopupSum = driver.findElement(By.cssSelector("p[class='header__payment-amount']"));
-        assertEquals("1.00 BYN", paymentPopupSum.getText());
-
-        var paymentPopupInfo = driver.findElement(By.cssSelector("p[class='header__payment-info']"));
-        assertEquals("Оплата: Услуги связи Номер:375297777777", paymentPopupInfo.getText());
-    }
-
-    private int getLinkResponseCode(String url) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .GET()
-                .uri(URI.create(url))
-                .build();
-
-        HttpResponse<String> response = null;
-        try {
-            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        return response.statusCode();
     }
 }
