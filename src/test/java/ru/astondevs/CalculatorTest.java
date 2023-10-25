@@ -2,10 +2,10 @@ package ru.astondevs;
 
 import io.appium.java_client.AppiumDriver;
 import io.appium.java_client.remote.options.BaseOptions;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import io.qameta.allure.Description;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
+import org.junit.jupiter.api.*;
 import ru.astondevs.screen.CalculatorScreen;
 
 import java.net.MalformedURLException;
@@ -45,27 +45,38 @@ class CalculatorTest {
     }
 
     @Test
+    @DisplayName("Test two numbers sum")
+    @Description("The test attempts to put two numbers and find their sum, check result")
+    @Severity(SeverityLevel.CRITICAL)
     void testSum() {
         var sum = calculatorScreen.sum(2, 3);
         assertEquals("5", sum);
     }
 
     @Test
+    @DisplayName("Test two numbers subtraction")
+    @Description("The test attempts to put two numbers and find their subtraction, check result")
+    @Severity(SeverityLevel.CRITICAL)
     void testMinus() {
         var sum = calculatorScreen.minus(7, 3);
         assertEquals("4", sum);
     }
 
     @Test
+    @DisplayName("Test two numbers multiplication")
+    @Description("The test attempts to put two numbers and find their multiplication, check result")
+    @Severity(SeverityLevel.CRITICAL)
     void testMultiply() {
         var sum = calculatorScreen.multiply(5, 6);
         assertEquals("30", sum);
     }
 
     @Test
+    @DisplayName("Test two numbers division")
+    @Description("The test attempts to put two numbers and find their division, check result")
+    @Severity(SeverityLevel.CRITICAL)
     void testDivision() {
         var sum = calculatorScreen.division(8, 2);
         assertEquals("4", sum);
     }
-
 }
